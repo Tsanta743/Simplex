@@ -5,7 +5,7 @@ from fractions import Fraction
 class SimplexeApp:
     def __init__(self, master):
         self.master = master
-        master.title("Simplexe - Maximisation (3 variables)")
+        master.title("Simplexe - Maximisation ")
         master.configure(bg="#f0f4f8")
         self.n_contraintes = 3  # défaut
         self.vars = 3           # variables fixes à 3
@@ -62,7 +62,7 @@ class SimplexeApp:
         tk.Label(self.frame_contraintes, text="x1", bg="#f0f4f8").grid(row=0, column=1, padx=5)
         tk.Label(self.frame_contraintes, text="x2", bg="#f0f4f8").grid(row=0, column=2, padx=5)
         tk.Label(self.frame_contraintes, text="x3", bg="#f0f4f8").grid(row=0, column=3, padx=5)
-        tk.Label(self.frame_contraintes, text="b (RHS)", bg="#f0f4f8").grid(row=0, column=4, padx=5)
+        tk.Label(self.frame_contraintes, text="b", bg="#f0f4f8").grid(row=0, column=4, padx=5)
 
         # Saisie contraintes
         for i in range(n):
