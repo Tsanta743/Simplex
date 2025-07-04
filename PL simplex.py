@@ -1,131 +1,197 @@
 import tkinter as tk
 from tkinter import messagebox, scrolledtext
 from fractions import Fraction
-import pandas as pd
 
-def afficher_tableau(tableau, base, variables, etape):
-    cols = variables + ["Sol"]
-    index = base + ["Z"]
-    df = pd.DataFrame(tableau, columns=cols, index=index)
-    return f"\n🔄 Étape {etape} :\n{df.to_string()}\n"
-
-def afficher_resultat_final(tableau, base, variables, n_vars):
-    res = "\n✅ Résultat final :\n"
-    final_values = {var: Fraction(0) for var in variables[:n_vars]}
-
-    for j, var in enumerate(variables[:n_vars]):
-        col = [tableau[i][j] for i in range(len(tableau)-1)]
-        is_base = sum(1 for val in col if val == 1) == 1 and all(val in [0, 1] for val in col)
-        if is_base:
-            row_index = col.index(1)
-            final_values[var] = tableau[row_index][-1]
-
-    for var in sorted(final_values):
-        res += f"{var} = {final_values[var]}\n"
-    res += f"Z = {tableau[-1][-1]}\n"
-    return res
-
-
-def simplexe_max_fraction(A, b, c):
-    A = [[Fraction(aij) for aij in row] for row in A]
-    b = [Fraction(bi) for bi in b]
-    c = [Fraction(ci) for ci in c]
-
-    m, n = len(A), len(A[0])
-    total_vars = n + m
-    tableau = [[Fraction(0)] * (total_vars + 1) for _ in range(m + 1)]
-
-    for i in range(m):
-        for j in range(n):
-            tableau[i][j] = A[i][j]
-        tableau[i][n + i] = Fraction(1)
-        tableau[i][-1] = b[i]
-
-    for j in range(n):
-        tableau[-1][j] = -c[j]
-
-    variables = [f"x{j+1}" for j in range(n)] + [f"s{i+1}" for i in range(m)]
-    base = [f"s{i+1}" for i in range(m)]
-
-    etape = 0
-    log = afficher_tableau(tableau, base, variables, etape)
-
-    while True:
-        last_row = tableau[-1][:-1]
-        if all(x <= 0 for x in last_row):
-            break
-
-        pivot_col = last_row.index(max(last_row))
-        ratios = []
-        for i in range(m):
-            if tableau[i][pivot_col] > 0:
-                ratios.append(tableau[i][-1] / tableau[i][pivot_col])
-            else:
-                ratios.append(Fraction('inf'))
-
-        if all(r == Fraction('inf') for r in ratios):
-            return "❌ Problème non borné."
-
-        pivot_row = ratios.index(min(ratios))
-        pivot = tableau[pivot_row][pivot_col]
-        tableau[pivot_row] = [x / pivot for x in tableau[pivot_row]]
-
-        for i in range(m + 1):
-            if i != pivot_row:
-                coef = tableau[i][pivot_col]
-                tableau[i] = [
-                    tableau[i][j] - coef * tableau[pivot_row][j]
-                    for j in range(total_vars + 1)
-                ]
-
-        base[pivot_row] = variables[pivot_col]
-        etape += 1
-        log += afficher_tableau(tableau, base, variables, etape)
-
-    log += afficher_resultat_final(tableau, base, variables, n)
-    return log
-
-# Interface Tkinter
 class SimplexeApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Simplexe - Résolution exacte (Fraction)")
-        self.root.geometry("850x650")
+    def __init__(self, master):
+        self.master = master
+        master.title("Simplexe - Maximisation (3 variables)")
+        master.configure(bg="#f0f4f8")
+        self.n_contraintes = 3  # défaut
+        self.vars = 3           # variables fixes à 3
+        self.entries_constraints = []
+        self.build_interface()
 
-        tk.Label(root, text="Fonction Objectif (ex: 3 5 4)").pack()
-        self.obj_entry = tk.Entry(root, width=80)
-        self.obj_entry.pack()
+    def build_interface(self):
+        tk.Label(self.master, text="Méthode du Simplexe", font=("Arial", 16, "bold"), bg="#f0f4f8", fg="#003366")\
+            .grid(row=0, column=0, columnspan=8, pady=10)
 
-        tk.Label(root, text="Contraintes (ex: 2 3 0 <= 8)").pack()
-        self.constraints_text = scrolledtext.ScrolledText(root, width=80, height=5)
-        self.constraints_text.pack()
+        tk.Label(self.master, text="Fonction Objectif : Max Z = c1·x1 + c2·x2 + c3·x3", font=("Arial", 12), bg="#f0f4f8")\
+            .grid(row=1, column=0, columnspan=8)
 
-        tk.Button(root, text="Résoudre", command=self.resoudre).pack(pady=5)
+        # Coefficients fonction objectif
+        tk.Label(self.master, text="c1", bg="#f0f4f8").grid(row=2, column=1)
+        tk.Label(self.master, text="c2", bg="#f0f4f8").grid(row=2, column=2)
+        tk.Label(self.master, text="c3", bg="#f0f4f8").grid(row=2, column=3)
 
-        self.result_text = scrolledtext.ScrolledText(root, width=100, height=30)
-        self.result_text.pack()
+        self.c1 = tk.Entry(self.master, width=6)
+        self.c2 = tk.Entry(self.master, width=6)
+        self.c3 = tk.Entry(self.master, width=6)
+        self.c1.grid(row=3, column=1, padx=5, pady=5)
+        self.c2.grid(row=3, column=2, padx=5, pady=5)
+        self.c3.grid(row=3, column=3, padx=5, pady=5)
+
+        # Choix nombre contraintes
+        tk.Label(self.master, text="Nombre de contraintes:", bg="#f0f4f8").grid(row=4, column=0, sticky='w', padx=5)
+        self.spin_contraintes = tk.Spinbox(self.master, from_=1, to=10, width=5, command=self.maj_contraintes)
+        self.spin_contraintes.grid(row=4, column=1, sticky='w')
+        self.spin_contraintes.delete(0, tk.END)
+        self.spin_contraintes.insert(0, str(self.n_contraintes))
+
+        # Frame pour contraintes
+        self.frame_contraintes = tk.Frame(self.master, bg="#f0f4f8")
+        self.frame_contraintes.grid(row=5, column=0, columnspan=8, pady=10)
+
+        self.afficher_contraintes(self.n_contraintes)
+
+        # Bouton résoudre
+        tk.Button(self.master, text="Résoudre", bg="#007acc", fg="white", font=("Arial", 11, "bold"),
+                  command=self.resoudre).grid(row=6, column=0, columnspan=8, pady=10)
+
+        # Résultat scrollable
+        self.result_text = scrolledtext.ScrolledText(self.master, width=80, height=20, font=("Courier", 10))
+        self.result_text.grid(row=7, column=0, columnspan=8, padx=10, pady=5)
+
+    def afficher_contraintes(self, n):
+        # Nettoyer
+        for widget in self.frame_contraintes.winfo_children():
+            widget.destroy()
+        self.entries_constraints = []
+
+        # Entêtes colonnes
+        tk.Label(self.frame_contraintes, text="x1", bg="#f0f4f8").grid(row=0, column=1, padx=5)
+        tk.Label(self.frame_contraintes, text="x2", bg="#f0f4f8").grid(row=0, column=2, padx=5)
+        tk.Label(self.frame_contraintes, text="x3", bg="#f0f4f8").grid(row=0, column=3, padx=5)
+        tk.Label(self.frame_contraintes, text="b (RHS)", bg="#f0f4f8").grid(row=0, column=4, padx=5)
+
+        # Saisie contraintes
+        for i in range(n):
+            tk.Label(self.frame_contraintes, text=f"Contrainte {i+1} (≤)", bg="#f0f4f8").grid(row=i+1, column=0, padx=5, sticky='w')
+            row_entries = []
+            for j in range(4):  # 3 coeffs + RHS
+                entry = tk.Entry(self.frame_contraintes, width=7)
+                entry.grid(row=i+1, column=j+1, padx=5, pady=3)
+                row_entries.append(entry)
+            self.entries_constraints.append(row_entries)
+
+    def maj_contraintes(self):
+        try:
+            n = int(self.spin_contraintes.get())
+            if 1 <= n <= 10:
+                self.n_contraintes = n
+                self.afficher_contraintes(n)
+        except:
+            pass
+
+    def afficher_tableau(self, tableau, iteration):
+        self.result_text.insert(tk.END, f"\n--- Itération {iteration} ---\n")
+        header = ["x1", "x2", "x3"] + [f"s{i+1}" for i in range(self.n_contraintes)] + ["b"]
+        larg = 10
+
+        # Affichage header
+        self.result_text.insert(tk.END, "".join(h.center(larg) for h in header) + "\n")
+
+        # Affichage lignes
+        for ligne in tableau:
+            ligne_str = "".join(str(el).center(larg) for el in ligne)
+            self.result_text.insert(tk.END, ligne_str + "\n")
 
     def resoudre(self):
+        self.result_text.delete(1.0, tk.END)
         try:
-            c = list(map(Fraction, self.obj_entry.get().strip().split()))
-            raw_constraints = self.constraints_text.get("1.0", tk.END).strip().split("\n")
+            # Fonction objectif
+            c = [Fraction(self.c1.get()), Fraction(self.c2.get()), Fraction(self.c3.get())]
 
-            A, b = [], []
-            for line in raw_constraints:
-                parts = line.strip().split()
-                *coeffs, sign, rhs = parts
-                if sign != "<=":
-                    raise ValueError("Seules les contraintes <= sont supportées dans cette version.")
-                A.append(list(map(Fraction, coeffs)))
-                b.append(Fraction(rhs))
+            # Récupérer contraintes
+            A = []
+            b = []
+            for row in self.entries_constraints:
+                coeffs = [Fraction(cell.get()) for cell in row[:3]]
+                val_b = Fraction(row[3].get())
+                A.append(coeffs)
+                b.append(val_b)
 
-            result = simplexe_max_fraction(A, b, c)
-            self.result_text.delete("1.0", tk.END)
-            self.result_text.insert(tk.END, result)
+            n = self.n_contraintes
+            m = self.vars
+
+            # Construire tableau simplexe : A + slack + b
+            tableau = []
+            for i in range(n):
+                slack = [Fraction(0)] * n
+                slack[i] = Fraction(1)
+                tableau.append(A[i] + slack + [b[i]])
+
+            # Ligne objectif (Z)
+            tableau.append([-ci for ci in c] + [Fraction(0)] * (n + 1))
+
+            lignes = n + 1
+            colonnes = m + n + 1
+
+            iteration = 0
+            self.afficher_tableau(tableau, iteration)
+
+            def colonne_pivot():
+                min_val = Fraction(0)
+                idx = -1
+                for j in range(colonnes -1):
+                    if tableau[-1][j] < min_val:
+                        min_val = tableau[-1][j]
+                        idx = j
+                return idx
+
+            def ligne_pivot(col):
+                min_ratio = float('inf')
+                idx = -1
+                for i in range(lignes - 1):
+                    if tableau[i][col] > 0:
+                        ratio = float(tableau[i][-1] / tableau[i][col])
+                        if ratio < min_ratio:
+                            min_ratio = ratio
+                            idx = i
+                return idx
+
+            # Algorithme Simplexe
+            while True:
+                col_p = colonne_pivot()
+                if col_p == -1:
+                    break
+                row_p = ligne_pivot(col_p)
+                if row_p == -1:
+                    self.result_text.insert(tk.END, " Solution non bornée.\n")
+                    return
+
+                pivot = tableau[row_p][col_p]
+                tableau[row_p] = [x / pivot for x in tableau[row_p]]
+
+                for i in range(lignes):
+                    if i != row_p:
+                        facteur = tableau[i][col_p]
+                        tableau[i] = [tableau[i][j] - facteur * tableau[row_p][j] for j in range(colonnes)]
+
+                iteration += 1
+                self.afficher_tableau(tableau, iteration)
+
+            # Extraire solution
+            solution = [Fraction(0)]*m
+            for j in range(m):
+                col = [tableau[i][j] for i in range(lignes)]
+                if col.count(Fraction(1)) == 1 and col.count(Fraction(0)) == lignes -1:
+                    one_index = col.index(Fraction(1))
+                    solution[j] = tableau[one_index][-1]
+
+            Z = tableau[-1][-1]
+
+            # Affichage solution
+            self.result_text.insert(tk.END, "\n Solution optimale :\n")
+            for i in range(m):
+                self.result_text.insert(tk.END, f"x{i+1} = {solution[i]}\n")
+            self.result_text.insert(tk.END, f"Z = {Z}\n")
+
         except Exception as e:
-            messagebox.showerror("Erreur", str(e))
+            messagebox.showerror("Erreur", f"Entrée invalide ou erreur:\n{e}")
 
-# Lancer l'application
+
+
 if __name__ == "__main__":
     root = tk.Tk()
     app = SimplexeApp(root)
